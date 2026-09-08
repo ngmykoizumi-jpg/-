@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>サンプル評価 月次集計ツール</title>
+<style>
+  :root{
+    --ink:#2b2b28;
+    --paper:#faf8f4;
+    --line:#ddd6c8;
+    --accent:#8a6d3b;
+    --accent-soft:#efe6d6;
+    --good:#3f6b4a;
+    --warn:#a34d3a;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:"Hiragino Sans","Yu Gothic",sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    line-height:1.6;
+  }
+  header{
+    padding:28px 32px 16px;
+    border-bottom:1px solid var(--line);
+  }
+  header h1{
+    margin:0 0 4px;
+    font-size:1.4rem;
+    font-weight:700;
+  }
+  header p{
+    margin:0;
+    color:#6b6558;
+    font-size:0.9rem;
+  }
+  main{
+    max-width:920px;
+    margin:0 auto;
+    padding:24px 32px 64px;
+  }
+  section{
+    margin-bottom:28px;
+  }
+  h2{
+    font-size:1rem;
+    border-left:4px solid var(--accent);
+    padding-left:10px;
+    margin:0 0 14px;
+  }
+  .card{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:20px 22px;
+  }
+  label{
+    display:block;
+    font-size:0.85rem;
+    color:#4a453b;
+    margin-bottom:6px;
+  }
+  input[type="file"],input[type="number"]{
+    width:100%;
+    padding:9px 10px;
+    border:1px solid var(--line);
+    border-radius:4px;
+    font-size:0.95rem;
+    background:#fdfcfa;
+  }
+  .row{
+    display:flex;
+    gap:18px;
+    flex-wrap:wrap;
+  }
+  .row > div{
+    flex:1 1 220px;
+  }
+  button{
+    margin-top:18px;
+    background:var(--accent);
+    color:#fff;
+    border:none;
+    padding:11px 22px;
+    font-size:0.95rem;
+    border-radius:4px;
+    cursor:pointer;
+  }
+  button:hover{ background:#755a2c; }
+  button:disabled{ background:#c9bfa8; cursor:not-allowed; }
+  .status{
+    font-size:0.85rem;
+    margin-top:10px;
+    color:#6b6558;
+  }
+  .status.error{ color:var(--warn); }
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:0.95rem;
+  }
+  td{
+    padding:9px 6px;
+    border-bottom:1px solid var(--line);
+  }
+  td.num{
+    text-align:right;
+    font-variant-numeric:tabular-nums;
+    font-weight:600;
+    width:110px;
+  }
+  tr.sub td:first-child{ padding-left:22px; color:#5c5648; }
+  tr.total td{ font-weight:700; background:var(--accent-soft); }
+  .note{
+    font-size:0.8rem;
+    color:#7a7362;
+    margin-top:18px;
+    border-top:1px dashed var(--line);
+    padding-top:12px;
+  }
+  .hidden{ display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>サンプル評価 月次集計ツール</h1>
+  <p>「サンプル評価結果」CSVをアップロードすると、月次集計の数値を自動計算します。</p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>入力</h2>
+    <div class="row">
+      <div>
+        <label for="csvFile">対象月のCSVファイル</label>
+        <input type="file" id="csvFile" accept=".csv">
+      </div>
+      <div>
+        <label for="threshold">今月の新規会員IDしきい値<br>(このID以上を新規会員とする)</label>
+        <input type="number" id="threshold" placeholder="例: 21066">
+      </div>
+      <div>
+        <label for="prevPrevNew">先々月の新規会員数<br>(手入力・2ヶ月合計用)</label>
+        <input type="number" id="prevPrevNew" placeholder="例: 12">
+      </div>
+    </div>
+    <button id="runBtn">集計する</button>
+    <div id="status" class="status"></div>
+  </section>
+
+  <section id="resultSection" class="card hidden">
+    <h2>集計結果</h2>
+    <table>
+      <tbody id="resultBody"></tbody>
+    </table>
+    <div class="note">
+      <strong>集計ロジックの前提</strong><br>
+      ・サンプル数＝商品行の総数<br>
+      ・採用数／不採用数は、「評価都合／採用数」列に数値が入っている注文（＝評価確定済み）を対象に、注文内の商品行数から採用数を差し引いて不採用数を算出<br>
+      ・「評価都合／採用数」が空欄の注文のうち、評価結果欄に「未回収」の文言があるものをアンケート未回収、それ以外を検討中として分類（テキスト判定のため、誤検知の可能性あり。要目視確認）<br>
+      ・依頼者・採用者は Bカート会員ID 単位でカウント（同一注文内の複数商品は1人として集計）<br>
+      ・新規／既存は、入力したしきい値以上のBカート会員IDを新規会員として判定<br>
+      ・サンプル採用率＝採用数 ÷（採用数＋不採用数）※検討中・未回収を除く確定分に対する比率<br>
+      ・新規サンプル発注率＝サンプル依頼新規者数 ÷ サンプル依頼者数
+    </div>
+  </section>
+</main>
+
+<script>
+function parseCSV(text) {
+  // RFC4180ライクなCSVパーサー（引用符内の改行・カンマ・エスケープに対応）
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  let i = 0;
+  const len = text.length;
+  while (i < len) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
+        inQuotes = false; i++; continue;
+      } else {
+        field += c; i++; continue;
+      }
+    } else {
+      if (c === '"') { inQuotes = true; i++; continue; }
+      if (c === ',') { row.push(field); field = ''; i++; continue; }
+      if (c === '\r') { i++; continue; }
+      if (c === '\n') {
+        row.push(field); rows.push(row);
+        row = []; field = ''; i++; continue;
+      }
+      field += c; i++; continue;
+    }
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.length > 1 || (r.length === 1 && r[0] !== ''));
+}
+
+function toRecords(rows) {
+  const header = rows[0];
+  return rows.slice(1).map(r => {
+    const obj = {};
+    header.forEach((h, idx) => { obj[h.trim()] = (r[idx] !== undefined ? r[idx] : '').trim(); });
+    return obj;
+  });
+}
+
+document.getElementById('runBtn').addEventListener('click', async () => {
+  const fileInput = document.getElementById('csvFile');
+  const statusEl = document.getElementById('status');
+  const thresholdVal = document.getElementById('threshold').value;
+  const prevPrevVal = document.getElementById('prevPrevNew').value;
+
+  statusEl.classList.remove('error');
+  if (!fileInput.files[0]) { statusEl.textContent = 'CSVファイルを選択してください。'; statusEl.classList.add('error'); return; }
+  if (thresholdVal === '') { statusEl.textContent = '新規会員IDしきい値を入力してください。'; statusEl.classList.add('error'); return; }
+
+  const threshold = parseInt(thresholdVal, 10);
+  const prevPrevNew = prevPrevVal === '' ? 0 : parseInt(prevPrevVal, 10);
+
+  statusEl.textContent = '読み込み中...';
+
+  try {
+    const buf = await fileInput.files[0].arrayBuffer();
+    let text;
+    try {
+      text = new TextDecoder('shift-jis').decode(buf);
+    } catch (e) {
+      text = new TextDecoder('utf-8').decode(buf);
+    }
+
+    const rows = parseCSV(text);
+    const records = toRecords(rows);
+
+    if (records.length === 0) throw new Error('CSVからデータを読み取れませんでした。列名を確認してください。');
+
+    // 受注番号ごとにグループ化
+    const orders = {};
+    records.forEach(rec => {
+      const orderId = rec['受注番号'];
+      if (!orderId) return;
+      if (!orders[orderId]) {
+        orders[orderId] = {
+          memberId: rec['Bカート会員ID'],
+          rows: [],
+          adoptedRaw: rec['評価都合／採用数'],
+          evalText: ''
+        };
+      }
+      orders[orderId].rows.push(rec);
+      if (rec['サンプル評価結果']) {
+        orders[orderId].evalText += rec['サンプル評価結果'] + '\n';
+      }
+    });
+
+    const orderList = Object.values(orders);
+
+    let sampleCount = records.length;
+    let adoptedTotal = 0;
+    let rejectedTotal = 0;
+    let pendingCount = 0;      // 検討中(商品行数)
+    let uncollectedCount = 0;  // アンケート未回収(商品行数)
+
+    const memberSeen = {};      // 依頼者(会員ID)ごとの新規/既存
+    const memberAdopted = {};   // 採用者(会員ID)ごとに採用有無
+
+    orderList.forEach(o => {
+      const rowCount = o.rows.length;
+      const memberId = o.memberId;
+      const isNew = memberId && parseInt(memberId, 10) >= threshold;
+
+      if (memberId) {
+        if (!(memberId in memberSeen)) memberSeen[memberId] = isNew;
+      }
+
+      const adoptedStr = (o.adoptedRaw || '').trim();
+      const hasDecision = adoptedStr !== '' && !isNaN(parseInt(adoptedStr, 10));
+
+      if (hasDecision) {
+        const adopted = parseInt(adoptedStr, 10);
+        adoptedTotal += adopted;
+        rejectedTotal += Math.max(rowCount - adopted, 0);
+        if (adopted > 0 && memberId) {
+          memberAdopted[memberId] = true;
+        } else if (memberId && !(memberId in memberAdopted)) {
+          memberAdopted[memberId] = memberAdopted[memberId] || false;
+        }
+      } else {
+        if (o.evalText.includes('未回収')) {
+          uncollectedCount += rowCount;
+        } else {
+          pendingCount += rowCount;
+        }
+      }
+    });
+
+    const requesterIds = Object.keys(memberSeen);
+    const requesterTotal = requesterIds.length;
+    const requesterExisting = requesterIds.filter(id => !memberSeen[id]).length;
+    const requesterNew = requesterIds.filter(id => memberSeen[id]).length;
+
+    const adopterIds = Object.keys(memberAdopted).filter(id => memberAdopted[id]);
+    const adopterTotal = adopterIds.length;
+    const adopterExisting = adopterIds.filter(id => !memberSeen[id]).length;
+    const adopterNew = adopterIds.filter(id => memberSeen[id]).length;
+
+    const decidedTotal = adoptedTotal + rejectedTotal;
+    const adoptionRate = decidedTotal > 0 ? (adoptedTotal / decidedTotal * 100) : 0;
+    const newRequestRate = requesterTotal > 0 ? (requesterNew / requesterTotal * 100) : 0;
+
+    const twoMonthNew = requesterNew + prevPrevNew;
+
+    const fmt = n => Number.isFinite(n) ? n.toLocaleString('ja-JP') : '-';
+    const fmtPct = n => n.toFixed(1) + '%';
+
+    const body = document.getElementById('resultBody');
+    body.innerHTML = '';
+    const addRow = (label, value, opts = {}) => {
+      const tr = document.createElement('tr');
+      if (opts.sub) tr.className = 'sub';
+      if (opts.total) tr.className = 'total';
+      tr.innerHTML = `<td>${label}</td><td class="num">${value}</td>`;
+      body.appendChild(tr);
+    };
+
+    addRow('サンプル数', fmt(sampleCount));
+    addRow('採用数', fmt(adoptedTotal));
+    addRow('不採用数', fmt(rejectedTotal));
+    addRow('検討中', fmt(pendingCount));
+    addRow('アンケート未回収', fmt(uncollectedCount));
+    addRow('サンプル依頼者数', fmt(requesterTotal), { total: true });
+    addRow('　うち既存会員', fmt(requesterExisting), { sub: true });
+    addRow('　うち新規会員', fmt(requesterNew), { sub: true });
+    addRow('採用者数', fmt(adopterTotal), { total: true });
+    addRow('　うち既存会員', fmt(adopterExisting), { sub: true });
+    addRow('　うち新規会員', fmt(adopterNew), { sub: true });
+    addRow('サンプル採用率', fmtPct(adoptionRate));
+    addRow('新規サンプル発注率', fmtPct(newRequestRate));
+    addRow('新規会員数（先月＋先々月 合計）', fmt(twoMonthNew), { total: true });
+
+    document.getElementById('resultSection').classList.remove('hidden');
+    statusEl.textContent = `${orderList.length}件の注文（商品行数 ${sampleCount}）を集計しました。`;
+  } catch (err) {
+    statusEl.textContent = 'エラー: ' + err.message;
+    statusEl.classList.add('error');
+    console.error(err);
+  }
+});
+</script>
+</body>
+</html>
