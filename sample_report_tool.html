@@ -309,8 +309,20 @@ document.getElementById('runBtn').addEventListener('click', async () => {
     const adopterNew = adopterIds.filter(id => memberSeen[id]).length;
 
     const decidedTotal = adoptedTotal + rejectedTotal;
-    const adoptionRate = decidedTotal > 0 ? (adoptedTotal / decidedTotal * 100) : 0;
-    const newRequestRate = requesterTotal > 0 ? (requesterNew / requesterTotal * 100) : 0;
+    const rejectedPendingTotal = rejectedTotal + pendingCount;
+
+    const adoptedRate = sampleCount > 0 ? (adoptedTotal / sampleCount * 100) : 0;
+    const rejectedPendingRate = sampleCount > 0 ? (rejectedPendingTotal / sampleCount * 100) : 0;
+    const uncollectedRate = sampleCount > 0 ? (uncollectedCount / sampleCount * 100) : 0;
+
+    const existingRate = requesterTotal > 0 ? (requesterExisting / requesterTotal * 100) : 0;
+    const newRate = requesterTotal > 0 ? (requesterNew / requesterTotal * 100) : 0;
+    const adopterRate = requesterTotal > 0 ? (adopterTotal / requesterTotal * 100) : 0;
+    const existingAdoptionRate = requesterExisting > 0 ? (adopterExisting / requesterExisting * 100) : 0;
+    const newAdoptionRate = requesterNew > 0 ? (adopterNew / requesterNew * 100) : 0;
+    const sampleAdoptionRate = requesterTotal > 0 ? (adopterTotal / requesterTotal * 100) : 0;
+    const twoMonthNewMembers = requesterNew + prevPrevNew;
+    const newOrderRate = twoMonthNewMembers > 0 ? (requesterNew / twoMonthNewMembers * 100) : 0;
 
     const fmt = n => Number.isFinite(n) ? n.toLocaleString('ja-JP') : '-';
     const fmtPct = n => n.toFixed(1) + '%';
@@ -327,19 +339,26 @@ document.getElementById('runBtn').addEventListener('click', async () => {
 
     addRow('サンプル数', fmt(sampleCount));
     addRow('採用数', fmt(adoptedTotal));
-    addRow('不採用数', fmt(rejectedTotal));
-    addRow('検討中', fmt(pendingCount));
+    addRow('不採用・検討中', fmt(rejectedPendingTotal));
     addRow('アンケート未回収', fmt(uncollectedCount));
+    addRow('採用数率', fmtPct(adoptedRate));
+    addRow('不採用・検討中率', fmtPct(rejectedPendingRate));
+    addRow('未回収率', fmtPct(uncollectedRate));
     addRow('サンプル依頼者数', fmt(requesterTotal), { total: true });
-    addRow('　うち既存会員', fmt(requesterExisting), { sub: true });
-    addRow('　うち新規会員', fmt(requesterNew), { sub: true });
-    addRow('採用者数', fmt(adopterTotal), { total: true });
-    addRow('　うち既存会員', fmt(adopterExisting), { sub: true });
-    addRow('　うち新規会員', fmt(adopterNew), { sub: true });
-    addRow('サンプル採用率', fmtPct(adoptionRate));
-    addRow('新規サンプル発注率', fmtPct(newRequestRate));
+    addRow('　うち既存社数', fmt(requesterExisting), { sub: true });
+    addRow('　うち新規社数', fmt(requesterNew), { sub: true });
+    addRow('既存社数率', fmtPct(existingRate));
+    addRow('新規社数率', fmtPct(newRate));
+    addRow('採用者数（採用社数）', fmt(adopterTotal), { total: true });
+    addRow('　うち既存採用社数', fmt(adopterExisting), { sub: true });
+    addRow('　うち新規採用社数', fmt(adopterNew), { sub: true });
+    addRow('採用社数率', fmtPct(adopterRate));
+    addRow('既存社採用率', fmtPct(existingAdoptionRate));
+    addRow('新規社採用率', fmtPct(newAdoptionRate));
     addRow('新規会員数（先月分）', fmt(requesterNew), { total: true });
     addRow('新規会員数（先々月分・入力値）', fmt(prevPrevNew), { total: true });
+    addRow('サンプル採用率', fmtPct(sampleAdoptionRate));
+    addRow('新規サンプル発注率', fmtPct(newOrderRate));
 
     document.getElementById('resultSection').classList.remove('hidden');
     statusEl.textContent = `${orderList.length}件の注文（商品行数 ${sampleCount}）を集計しました。`;
