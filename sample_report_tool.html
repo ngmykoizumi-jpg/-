@@ -141,7 +141,7 @@
         <input type="number" id="threshold" placeholder="例: 21066">
       </div>
       <div>
-        <label for="prevPrevNew">先々月の新規会員数<br>(手入力・2ヶ月合計用)</label>
+        <label for="prevPrevNew">先々月の新規会員数<br>(手入力・参考表示のみ)</label>
         <input type="number" id="prevPrevNew" placeholder="例: 12">
       </div>
     </div>
@@ -158,7 +158,7 @@
       <strong>集計ロジックの前提</strong><br>
       ・サンプル数＝商品行の総数<br>
       ・採用数／不採用数は、「評価都合／採用数」列に数値が入っている注文（＝評価確定済み）を対象に、注文内の商品行数から採用数を差し引いて不採用数を算出<br>
-      ・「評価都合／採用数」が空欄の注文のうち、評価結果欄に「未回収」の文言があるものをアンケート未回収、それ以外を検討中として分類（テキスト判定のため、誤検知の可能性あり。要目視確認）<br>
+      ・「評価都合／採用数」が空欄の注文のうち、評価結果欄に「未回収」の文言があるものを検討中（催促済み・返答待ち）、それ以外（無反応・スケジュール調整メモのみ等）をアンケート未回収として分類（テキスト判定のため、誤検知の可能性あり。要目視確認）<br>
       ・依頼者・採用者は Bカート会員ID 単位でカウント（同一注文内の複数商品は1人として集計）<br>
       ・新規／既存は、入力したしきい値以上のBカート会員IDを新規会員として判定<br>
       ・サンプル採用率＝採用数 ÷（採用数＋不採用数）※検討中・未回収を除く確定分に対する比率<br>
@@ -291,9 +291,9 @@ document.getElementById('runBtn').addEventListener('click', async () => {
         }
       } else {
         if (o.evalText.includes('未回収')) {
-          uncollectedCount += rowCount;
-        } else {
           pendingCount += rowCount;
+        } else {
+          uncollectedCount += rowCount;
         }
       }
     });
@@ -311,8 +311,6 @@ document.getElementById('runBtn').addEventListener('click', async () => {
     const decidedTotal = adoptedTotal + rejectedTotal;
     const adoptionRate = decidedTotal > 0 ? (adoptedTotal / decidedTotal * 100) : 0;
     const newRequestRate = requesterTotal > 0 ? (requesterNew / requesterTotal * 100) : 0;
-
-    const twoMonthNew = requesterNew + prevPrevNew;
 
     const fmt = n => Number.isFinite(n) ? n.toLocaleString('ja-JP') : '-';
     const fmtPct = n => n.toFixed(1) + '%';
@@ -340,7 +338,8 @@ document.getElementById('runBtn').addEventListener('click', async () => {
     addRow('　うち新規会員', fmt(adopterNew), { sub: true });
     addRow('サンプル採用率', fmtPct(adoptionRate));
     addRow('新規サンプル発注率', fmtPct(newRequestRate));
-    addRow('新規会員数（先月＋先々月 合計）', fmt(twoMonthNew), { total: true });
+    addRow('新規会員数（先月分）', fmt(requesterNew), { total: true });
+    addRow('新規会員数（先々月分・入力値）', fmt(prevPrevNew), { total: true });
 
     document.getElementById('resultSection').classList.remove('hidden');
     statusEl.textContent = `${orderList.length}件の注文（商品行数 ${sampleCount}）を集計しました。`;
