@@ -141,8 +141,8 @@
         <input type="number" id="threshold" placeholder="例: 21066">
       </div>
       <div>
-        <label for="prevPrevNew">先々月の新規会員数<br>(手入力・参考表示のみ)</label>
-        <input type="number" id="prevPrevNew" placeholder="例: 12">
+        <label for="prevPrevNew">新規会員数（2ヵ月合計・会員全体）<br>(手入力)</label>
+        <input type="number" id="prevPrevNew" placeholder="例: 313">
       </div>
     </div>
     <button id="runBtn">集計する</button>
@@ -161,13 +161,30 @@
       ・「評価都合／採用数」が空欄の注文のうち、評価結果欄に「未回収」の文言があるもの、または評価結果欄自体が完全に空欄のものをアンケート未回収、それ以外(具体的なコメントはあるが最終決定が未入力)を検討中として分類（テキスト判定のため、誤検知の可能性あり。要目視確認）<br>
       ・依頼者・採用者は Bカート会員ID 単位でカウント（同一注文内の複数商品は1人として集計）<br>
       ・新規／既存は、入力したしきい値以上のBカート会員IDを新規会員として判定<br>
-      ・サンプル採用率＝採用数 ÷（採用数＋不採用数）※検討中・未回収を除く確定分に対する比率<br>
-      ・新規サンプル発注率＝サンプル依頼新規者数 ÷ サンプル依頼者数
+      ・サンプル採用率＝採用社数 ÷ サンプル依頼社数<br>
+      ・新規サンプル発注率＝サンプル新規社数 ÷ 新規会員数(2ヵ月合計・入力値)
     </div>
+  </section>
+
+  <section id="writeSection" class="card hidden">
+    <h2>スプレッドシートへ書き込み</h2>
+    <div class="row">
+      <div>
+        <label for="targetMonth">対象月（シートの見出しと同じ表記）</label>
+        <input type="text" id="targetMonth" placeholder="例: 2026年9月">
+      </div>
+      <div>
+        <label for="webAppUrl">Apps Script Web AppのURL</label>
+        <input type="text" id="webAppUrl" placeholder="https://script.google.com/macros/s/.../exec">
+      </div>
+    </div>
+    <button id="sendBtn">スプレッドシートに書き込む</button>
+    <div id="sendStatus" class="status"></div>
   </section>
 </main>
 
 <script>
+let lastResult = null;
 function parseCSV(text) {
   // RFC4180ライクなCSVパーサー（引用符内の改行・カンマ・エスケープに対応）
   const rows = [];
@@ -321,7 +338,7 @@ document.getElementById('runBtn').addEventListener('click', async () => {
     const existingAdoptionRate = requesterExisting > 0 ? (adopterExisting / requesterExisting * 100) : 0;
     const newAdoptionRate = requesterNew > 0 ? (adopterNew / requesterNew * 100) : 0;
     const sampleAdoptionRate = requesterTotal > 0 ? (adopterTotal / requesterTotal * 100) : 0;
-    const twoMonthNewMembers = requesterNew + prevPrevNew;
+    const twoMonthNewMembers = prevPrevNew;
     const newOrderRate = twoMonthNewMembers > 0 ? (requesterNew / twoMonthNewMembers * 100) : 0;
 
     const fmt = n => Number.isFinite(n) ? n.toLocaleString('ja-JP') : '-';
@@ -355,17 +372,64 @@ document.getElementById('runBtn').addEventListener('click', async () => {
     addRow('採用社数率', fmtPct(adopterRate));
     addRow('既存社採用率', fmtPct(existingAdoptionRate));
     addRow('新規社採用率', fmtPct(newAdoptionRate));
-    addRow('新規会員数（先月分）', fmt(requesterNew), { total: true });
-    addRow('新規会員数（先々月分・入力値）', fmt(prevPrevNew), { total: true });
+    addRow('新規会員数（2ヵ月合計・入力値）', fmt(prevPrevNew), { total: true });
     addRow('サンプル採用率', fmtPct(sampleAdoptionRate));
     addRow('新規サンプル発注率', fmtPct(newOrderRate));
 
     document.getElementById('resultSection').classList.remove('hidden');
     statusEl.textContent = `${orderList.length}件の注文（商品行数 ${sampleCount}）を集計しました。`;
+
+    lastResult = {
+      sampleCount, adoptedTotal, rejectedPendingTotal, uncollectedCount,
+      adoptedRate: Math.round(adoptedRate * 100) / 100,
+      rejectedPendingRate: Math.round(rejectedPendingRate * 100) / 100,
+      uncollectedRate: Math.round(uncollectedRate * 100) / 100,
+      requesterTotal, requesterExisting, requesterNew,
+      adopterTotal, adopterExisting, adopterNew,
+      sampleAdoptionRate: Math.round(sampleAdoptionRate * 100) / 100,
+      newOrderRate: Math.round(newOrderRate * 100) / 100,
+      twoMonthNewMembers: prevPrevNew
+    };
+    document.getElementById('writeSection').classList.remove('hidden');
+
+    const savedUrl = localStorage.getItem('sheetToolWebAppUrl');
+    if (savedUrl) document.getElementById('webAppUrl').value = savedUrl;
   } catch (err) {
     statusEl.textContent = 'エラー: ' + err.message;
     statusEl.classList.add('error');
     console.error(err);
+  }
+});
+
+document.getElementById('sendBtn').addEventListener('click', async () => {
+  const sendStatus = document.getElementById('sendStatus');
+  sendStatus.classList.remove('error');
+
+  if (!lastResult) { sendStatus.textContent = '先に集計を実行してください。'; sendStatus.classList.add('error'); return; }
+  const month = document.getElementById('targetMonth').value.trim();
+  const url = document.getElementById('webAppUrl').value.trim();
+  if (!month) { sendStatus.textContent = '対象月を入力してください（例: 2026年9月）。'; sendStatus.classList.add('error'); return; }
+  if (!url) { sendStatus.textContent = 'Web AppのURLを入力してください。'; sendStatus.classList.add('error'); return; }
+
+  localStorage.setItem('sheetToolWebAppUrl', url);
+  sendStatus.textContent = '送信中...';
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ month, ...lastResult })
+    });
+    const data = await res.json();
+    if (data.error) {
+      sendStatus.textContent = 'エラー: ' + data.error;
+      sendStatus.classList.add('error');
+    } else {
+      sendStatus.textContent = `書き込み完了（${month} の列に反映しました）`;
+    }
+  } catch (err) {
+    sendStatus.textContent = '送信エラー: ' + err.message + '（Web AppのURL・公開設定を確認してください）';
+    sendStatus.classList.add('error');
   }
 });
 </script>
