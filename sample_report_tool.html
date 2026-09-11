@@ -177,6 +177,10 @@
         <label for="webAppUrl">Apps Script Web AppのURL</label>
         <input type="text" id="webAppUrl" placeholder="https://script.google.com/macros/s/.../exec">
       </div>
+      <div>
+        <label for="passphrase">合言葉</label>
+        <input type="text" id="passphrase" placeholder="合言葉を入力">
+      </div>
     </div>
     <button id="sendBtn">スプレッドシートに書き込む</button>
     <div id="sendStatus" class="status"></div>
@@ -408,8 +412,10 @@ document.getElementById('sendBtn').addEventListener('click', async () => {
   if (!lastResult) { sendStatus.textContent = '先に集計を実行してください。'; sendStatus.classList.add('error'); return; }
   const month = document.getElementById('targetMonth').value.trim();
   const url = document.getElementById('webAppUrl').value.trim();
+  const passphrase = document.getElementById('passphrase').value.trim();
   if (!month) { sendStatus.textContent = '対象月を入力してください（例: 2026年9月）。'; sendStatus.classList.add('error'); return; }
   if (!url) { sendStatus.textContent = 'Web AppのURLを入力してください。'; sendStatus.classList.add('error'); return; }
+  if (!passphrase) { sendStatus.textContent = '合言葉を入力してください。'; sendStatus.classList.add('error'); return; }
 
   localStorage.setItem('sheetToolWebAppUrl', url);
   sendStatus.textContent = '送信中...';
@@ -418,7 +424,7 @@ document.getElementById('sendBtn').addEventListener('click', async () => {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ month, ...lastResult })
+      body: JSON.stringify({ month, passphrase, ...lastResult })
     });
     const data = await res.json();
     if (data.error) {
