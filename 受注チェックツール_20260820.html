@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>受注チェックツール</title>
+<style>
+  :root{
+    --paper:#FAF6EE;
+    --paper-deep:#F1EADB;
+    --ink:#2B2620;
+    --ink-soft:#6B6255;
+    --indigo:#2F4A5A;
+    --indigo-deep:#213640;
+    --persimmon:#BB5B2E;
+    --persimmon-deep:#9C4A22;
+    --line:#DDD3BF;
+    --warn-bg:#FBF0DA;
+    --warn-line:#C98A2B;
+    --overdue-bg:#FBE7E2;
+    --overdue-line:#B0392F;
+    --stagnant-bg:#F3E6D8;
+    --stagnant-line:#9C6B2E;
+    --ok-bg:#EAF1E9;
+    --ok-line:#5C7A5A;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic",Meiryo,sans-serif;
+    line-height:1.7;
+    padding-bottom:80px;
+  }
+  header{
+    position:relative;
+    padding:44px 24px 36px;
+    background:linear-gradient(180deg, var(--indigo) 0%, var(--indigo-deep) 100%);
+    color:#F5EFE2;
+    overflow:hidden;
+  }
+  header::before{
+    content:"";
+    position:absolute; inset:0;
+    opacity:0.14;
+    background-image:
+      linear-gradient(60deg, transparent 40%, #F5EFE2 40%, #F5EFE2 42%, transparent 42%),
+      linear-gradient(-60deg, transparent 40%, #F5EFE2 40%, #F5EFE2 42%, transparent 42%),
+      linear-gradient(60deg, transparent 60%, #F5EFE2 60%, #F5EFE2 62%, transparent 62%),
+      linear-gradient(-60deg, transparent 60%, #F5EFE2 60%, #F5EFE2 62%, transparent 62%);
+    background-size:52px 90px;
+  }
+  .header-inner{ position:relative; max-width:1360px; margin:0 auto; }
+  .eyebrow{
+    font-size:12px; letter-spacing:0.18em; text-transform:uppercase;
+    color:#D8CBAE; margin-bottom:10px;
+  }
+  h1{
+    font-family:"Hiragino Mincho ProN","Yu Mincho",serif;
+    font-weight:700;
+    font-size:clamp(26px, 4vw, 34px);
+    margin:0 0 10px;
+    letter-spacing:0.03em;
+  }
+  header p{
+    margin:0; color:#E3D9C4; font-size:14px; max-width:560px;
+  }
+  main{ max-width:1360px; margin:0 auto; padding:32px 24px 0; }
+  section.card{
+    background:#FFFFFF;
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:26px 28px;
+    margin-bottom:22px;
+  }
+  .card h2{
+    font-family:"Hiragino Mincho ProN","Yu Mincho",serif;
+    font-size:18px;
+    margin:0 0 4px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .card h2 .num{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:24px; height:24px; border-radius:50%;
+    background:var(--indigo); color:#F5EFE2;
+    font-size:12px; font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic",Meiryo,sans-serif; font-weight:700;
+  }
+  .card .desc{ color:var(--ink-soft); font-size:13px; margin:0 0 18px; }
+
+  .row{ display:flex; flex-wrap:wrap; gap:24px; }
+  .field{ flex:1 1 220px; }
+  .field label{ display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--ink); }
+  select, input[type=file], input[type=text], input[type=number]{
+    font-family:inherit; font-size:14px;
+    border:1px solid var(--line); border-radius:4px;
+    padding:8px 10px; background:#FCFAF4; color:var(--ink);
+    width:100%;
+  }
+  .toggle{ display:flex; border:1px solid var(--indigo); border-radius:4px; overflow:hidden; width:fit-content; }
+  .toggle button{
+    border:none; background:#FFFFFF; color:var(--indigo);
+    font-family:inherit; font-size:13px; font-weight:600;
+    padding:8px 18px; cursor:pointer;
+  }
+  .toggle button.active{ background:var(--indigo); color:#F5EFE2; }
+
+  table.leadtime{ width:100%; border-collapse:collapse; margin-top:6px; font-size:13px; }
+  table.leadtime th{ text-align:left; color:var(--ink-soft); font-weight:600; padding:4px 6px; border-bottom:1px solid var(--line); }
+  table.leadtime td{ padding:5px 6px; border-bottom:1px solid #EFE8D8; }
+  table.leadtime input{ padding:5px 8px; font-size:13px; }
+  .leadtime-add{ display:flex; gap:8px; margin-top:10px; align-items:flex-end; }
+  .leadtime-add .field{ flex:0 0 120px; }
+  .btn{
+    font-family:inherit; font-weight:600; font-size:14px;
+    border:none; border-radius:4px; padding:9px 16px; cursor:pointer;
+  }
+  .btn-persimmon{ background:var(--persimmon); color:#FFF6EC; }
+  .btn-persimmon:hover{ background:var(--persimmon-deep); }
+  .btn-outline{ background:transparent; border:1px solid var(--indigo); color:var(--indigo); }
+  .btn-outline:hover{ background:#EEF3F2; }
+  .btn:disabled{ opacity:0.45; cursor:not-allowed; }
+  .btn-remove{ background:none; border:none; color:var(--overdue-line); cursor:pointer; font-size:13px; }
+
+  .run-row{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  #status-msg{ font-size:13px; color:var(--ink-soft); }
+  #status-msg.error{ color:var(--overdue-line); font-weight:600; }
+
+  .dropzone{
+    border:2px dashed var(--line); border-radius:6px;
+    padding:28px 16px; text-align:center; cursor:pointer;
+    background:#FCFAF4; transition:background 0.15s, border-color 0.15s;
+  }
+  .dropzone.dragover{ background:#F3ECDA; border-color:var(--persimmon); }
+  .dropzone-text{ color:var(--ink-soft); font-size:14px; line-height:1.6; }
+  .dropzone-sub{ font-size:12px; }
+  .dropzone-files{ margin-top:10px; font-size:13px; color:var(--ink); font-weight:600; }
+
+  .summary{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
+  .summary .chip{
+    border-radius:4px; padding:10px 16px; font-size:13px; font-weight:600;
+    border-left:4px solid;
+  }
+  .chip.warning{ background:var(--warn-bg); border-color:var(--warn-line); color:#7A4E13; }
+  .chip.overdue{ background:var(--overdue-bg); border-color:var(--overdue-line); color:#7A2A21; }
+  .chip.stagnant{ background:var(--stagnant-bg); border-color:var(--stagnant-line); color:#6B4A1A; }
+  .chip.ok{ background:var(--ok-bg); border-color:var(--ok-line); color:#3D5A3B; }
+
+  table.results{ width:100%; border-collapse:collapse; font-size:13px; }
+  table.results th{
+    text-align:left; padding:9px 10px; background:var(--paper-deep);
+    border-bottom:1px solid var(--line); white-space:nowrap; font-weight:600; color:var(--ink);
+  }
+  table.results td{ padding:9px 10px; border-bottom:1px solid #F0E9DA; vertical-align:top; }
+  table.results td.wrap-col{ max-width:260px; }
+  table.results td.memo-col{ max-width:320px; }
+  table.results tr.warning{ border-left:4px solid var(--warn-line); background:#FFFCF6; }
+  table.results tr.overdue{ border-left:4px solid var(--overdue-line); background:#FFFAF8; }
+  table.results tr.stagnant{ border-left:4px solid var(--stagnant-line); background:#FFFBF6; }
+  .badge{
+    display:inline-block; padding:3px 10px; border-radius:999px;
+    font-size:12px; font-weight:700; white-space:nowrap;
+  }
+  .badge.warning{ background:var(--warn-line); color:#FFF8EA; }
+  .badge.overdue{ background:var(--overdue-line); color:#FFF3F0; }
+  .badge.stagnant{ background:var(--stagnant-line); color:#FFF6EC; }
+  .reason-cell{ min-width:200px; }
+  .reason-label{ font-weight:700; font-size:13.5px; color:var(--ink); }
+  .reason-detail{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
+  .empty-note{ color:var(--ink-soft); font-size:13px; padding:20px 4px; }
+  .table-wrap{ overflow-x:auto; }
+  footer{ text-align:center; color:var(--ink-soft); font-size:12px; padding:24px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="eyebrow">受注チェックツール／ブラウザ完結・データ送信なし</div>
+    <h1>メーカー依頼済みチェック</h1>
+    <p>Bカートの受注CSVを取り込むと、重複削除・並び替え・確認要否の判定までブラウザの中だけで行い、結果をCSV（Excelでそのまま開けます）でダウンロードできます。ファイルはこの画面の外に送信されません。外部サイトの読み込みも一切ありません。</p>
+  </div>
+</header>
+
+<main>
+
+  <section class="card">
+    <h2><span class="num">1</span>設定</h2>
+    <p class="desc">チェック対象と、CSVの文字コードを選んでください。</p>
+    <div class="row">
+      <div class="field">
+        <label>チェック対象</label>
+        <div class="toggle" id="modeToggle">
+          <button type="button" data-mode="normal" class="active">通常（メーカー依頼済）</button>
+          <button type="button" data-mode="hold">保留中（メーカー依頼済 保留中）</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="encodingSelect">CSVの文字コード</label>
+        <select id="encodingSelect">
+          <option value="Shift_JIS">Shift_JIS（Bカート標準）</option>
+          <option value="UTF-8">UTF-8</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;">
+      <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px;">商品コード別リードタイム（配送希望日が空欄の商品用・営業日数）</label>
+      <table class="leadtime" id="leadtimeTable">
+        <thead><tr><th>商品コード（[45]など）</th><th>リードタイム(営業日)</th><th></th></tr></thead>
+        <tbody id="leadtimeBody"></tbody>
+      </table>
+      <div class="leadtime-add">
+        <div class="field"><label>コード</label><input type="text" id="newCode" placeholder="例）45"></div>
+        <div class="field"><label>営業日数</label><input type="number" id="newDays" min="1" placeholder="例）7"></div>
+        <button class="btn btn-outline" id="addLeadtime" type="button">追加</button>
+      </div>
+      <p class="desc" style="margin-top:8px;">未設定の商品はデフォルト <strong id="defaultLeadTimeLabel">3</strong> 営業日で判定します。設定はこのブラウザに保存され、次回も引き継がれます。</p>
+    </div>
+
+    <div style="margin-top:20px;">
+      <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px;">スプレッドシートへの記録（任意）</label>
+      <p class="desc">チェック実行のたびに、結果をスプレッドシートへ自動で記録できます。GAS側で受け口を作成後、発行されたURLをここに設定してください。未設定の場合はブラウザでのチェックのみ行われます。</p>
+      <div class="row">
+        <div class="field">
+          <label for="logUrl">スプレッドシート記録用URL</label>
+          <input type="text" id="logUrl" placeholder="https://script.google.com/macros/s/.../exec" value="https://script.google.com/macros/s/AKfycbzjt4F4dgOVGquaDu7vzFveRt3ZaVYDKMKxdeETA0IXkv-kGWM-1zBfyO3G7_YPzjt9/exec">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2><span class="num">2</span>CSV取り込み</h2>
+    <p class="desc">Bカートからダウンロードした受注CSVを選んでください（500件を超えて複数ファイルに分かれている場合はまとめて選択できます）。</p>
+    <div id="dropZone" class="dropzone">
+      <div class="dropzone-text">ここにCSVをドラッグ＆ドロップ<br><span class="dropzone-sub">またはクリックして選択</span></div>
+      <div id="fileList" class="dropzone-files"></div>
+      <input type="file" id="csvFiles" accept=".csv" multiple style="display:none;">
+    </div>
+    <div class="run-row" style="margin-top:16px;">
+      <button class="btn btn-persimmon" id="runBtn">取り込んでチェック実行</button>
+      <span id="status-msg"></span>
+    </div>
+    <p id="log-status" style="font-size:12px; color:var(--ink-soft); margin-top:6px;"></p>
+  </section>
+
+  <section class="card" id="resultSection" style="display:none;">
+    <h2><span class="num">3</span>結果</h2>
+    <div class="summary" id="summaryChips"></div>
+    <div class="run-row" style="margin-bottom:16px;">
+      <button class="btn btn-outline" id="downloadBtn">CSVをダウンロード（Excelで開けます）</button>
+    </div>
+    <div class="table-wrap">
+      <table class="results" id="resultsTable">
+        <thead>
+          <tr>
+            <th>種別</th><th>受注番号</th><th>会社名</th><th>受注日</th><th>配送希望日</th>
+            <th>入金日</th><th>商品名</th><th>セット情報</th><th>メモ</th><th>理由</th>
+          </tr>
+        </thead>
+        <tbody id="resultsBody"></tbody>
+      </table>
+      <p class="empty-note" id="emptyNote" style="display:none;">確認が必要な注文はありませんでした。</p>
+    </div>
+  </section>
+
+</main>
+
+<footer>受注チェックツール ｜ すべての処理はこのブラウザの中だけで行われます</footer>
+
+<script>
+(function(){
+
+  // ==========================================
+  // 設定
+  // ==========================================
+  // 実際のCSV構成：受注番号,会社名,配送先 会社名,配送希望日,受注日時,商品名,セット名,受注数,メモ,決済確認日
+  const COL = {
+    ORDER_ID: 0, COMPANY_NAME: 1, DELIVERY_COMPANY: 2, DELIVERY_DATE: 3, ORDER_DATE: 4,
+    PRODUCT_NAME: 5, SET_INFO: 6, QTY: 7, MEMO: 8, PAYMENT_DATE: 9
+  }; // 0始まり
+  const DEFAULT_LEAD_TIME = 3;
+  let leadTimeOverrides = { '45': 7 };
+  const HEADER_ROW = true;
+
+  // 日本の祝日（2026・2027年分。年が変わったらここに追記してください）
+  const HOLIDAYS = new Set([
+    '2026-01-01','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29',
+    '2026-05-03','2026-05-04','2026-05-05','2026-05-06','2026-07-20','2026-08-11',
+    '2026-09-21','2026-09-22','2026-09-23','2026-10-12','2026-11-03','2026-11-23',
+    '2027-01-01','2027-01-11','2027-02-11','2027-02-23','2027-03-22','2027-04-29',
+    '2027-05-03','2027-05-04','2027-05-05','2027-07-19','2027-08-11','2027-09-20',
+    '2027-09-23','2027-10-11','2027-11-03','2027-11-23'
+  ]);
+
+  let mode = 'normal';
+  let lastResults = null;
+
+  // ==========================================
+  // 永続設定の読み込み（このブラウザだけに保存）
+  // ==========================================
+  function loadSettings(){
+    try{
+      const saved = localStorage.getItem('leadTimeOverrides');
+      if (saved) leadTimeOverrides = JSON.parse(saved);
+    }catch(e){ /* 未保存なら初期値のまま */ }
+    try{
+      const savedEncoding = localStorage.getItem('csvEncoding');
+      if (savedEncoding) document.getElementById('encodingSelect').value = savedEncoding;
+    }catch(e){}
+    try{
+      const savedUrl = localStorage.getItem('logUrl');
+      if (savedUrl) document.getElementById('logUrl').value = savedUrl;
+    }catch(e){}
+    renderLeadtimeTable();
+  }
+  function saveLeadTimeOverrides(){
+    try{ localStorage.setItem('leadTimeOverrides', JSON.stringify(leadTimeOverrides)); }catch(e){}
+  }
+  document.getElementById('encodingSelect').addEventListener('change', (e)=>{
+    try{ localStorage.setItem('csvEncoding', e.target.value); }catch(err){}
+  });
+  document.getElementById('logUrl').addEventListener('change', (e)=>{
+    try{ localStorage.setItem('logUrl', e.target.value.trim()); }catch(err){}
+  });
+
+  // ==========================================
+  // UI: モード切替
+  // ==========================================
+  document.getElementById('modeToggle').addEventListener('click', (e)=>{
+    const btn = e.target.closest('button'); if(!btn) return;
+    mode = btn.dataset.mode;
+    document.querySelectorAll('#modeToggle button').forEach(b=>b.classList.toggle('active', b===btn));
+  });
+
+  // ==========================================
+  // UI: リードタイム編集
+  // ==========================================
+  function renderLeadtimeTable(){
+    const body = document.getElementById('leadtimeBody');
+    body.innerHTML = '';
+    Object.keys(leadTimeOverrides).forEach(code=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>[${code}]</td><td>${leadTimeOverrides[code]}営業日</td><td><button class="btn-remove" data-code="${code}">削除</button></td>`;
+      body.appendChild(tr);
+    });
+    document.getElementById('defaultLeadTimeLabel').textContent = DEFAULT_LEAD_TIME;
+  }
+  document.getElementById('leadtimeBody').addEventListener('click', (e)=>{
+    if (e.target.matches('.btn-remove')){
+      delete leadTimeOverrides[e.target.dataset.code];
+      renderLeadtimeTable();
+      saveLeadTimeOverrides();
+    }
+  });
+  document.getElementById('addLeadtime').addEventListener('click', ()=>{
+    const codeEl = document.getElementById('newCode');
+    const daysEl = document.getElementById('newDays');
+    const code = codeEl.value.trim().replace(/[\[\]]/g,'');
+    const days = parseInt(daysEl.value, 10);
+    if (!code || !days || days < 1) return;
+    leadTimeOverrides[code] = days;
+    codeEl.value = ''; daysEl.value = '';
+    renderLeadtimeTable();
+    saveLeadTimeOverrides();
+  });
+
+  // ==========================================
+  // 日付ユーティリティ
+  // ==========================================
+  function parseDate(str){
+    if (!str) return null;
+    const s = String(str).trim();
+    const m = s.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    if (!m) return null;
+    const d = new Date(Number(m[1]), Number(m[2])-1, Number(m[3]));
+    d.setHours(0,0,0,0);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function addDays(date, days){
+    const d = new Date(date); d.setDate(d.getDate()+days); d.setHours(0,0,0,0); return d;
+  }
+  function formatDateKey(d){
+    const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  }
+  function formatDateJP(d){
+    if (!d) return '';
+    const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+    return `${y}/${m}/${day}`;
+  }
+  function isHoliday(date){ return HOLIDAYS.has(formatDateKey(date)); }
+
+  function getTargetDeliveryDates(baseDate){
+    const dow = baseDate.getDay();
+    const offsets = dow === 5 ? [1,2,3,4] : [1,2];
+    const dates = offsets.map(o=>addDays(baseDate,o));
+    while (isHoliday(dates[dates.length-1])){
+      dates.push(addDays(dates[dates.length-1], 1));
+    }
+    return new Set(dates.map(d=>d.getTime()));
+  }
+  function countBusinessDays(startDate, endDate){
+    let count=0; let cur=new Date(startDate.getTime());
+    while (cur.getTime() < endDate.getTime()){
+      cur.setDate(cur.getDate()+1);
+      const day = cur.getDay();
+      if (day!==0 && day!==6) count++;
+    }
+    return count;
+  }
+  function extractProductCode(text){
+    if (!text) return null;
+    const m = String(text).match(/\[(\d+)\]/);
+    return m ? m[1] : null;
+  }
+  function getLeadTime(code){
+    if (code && leadTimeOverrides[code] !== undefined) return leadTimeOverrides[code];
+    return DEFAULT_LEAD_TIME;
+  }
+  function getCol(row, idx){ return row[idx] !== undefined ? row[idx] : ''; }
+
+  // ==========================================
+  // CSVパーサー（外部ライブラリ不使用・RFC4180準拠の簡易実装）
+  // ==========================================
+  function parseCSV(text){
+    const rows = [];
+    let row = [], field = '', inQuotes = false;
+    for (let i = 0; i < text.length; i++){
+      const c = text[i];
+      if (inQuotes){
+        if (c === '"'){
+          if (text[i+1] === '"'){ field += '"'; i++; }
+          else { inQuotes = false; }
+        } else {
+          field += c;
+        }
+      } else {
+        if (c === '"'){ inQuotes = true; }
+        else if (c === ','){ row.push(field); field = ''; }
+        else if (c === '\r'){ /* skip, \n が改行を確定させる */ }
+        else if (c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+        else { field += c; }
+      }
+    }
+    if (field.length > 0 || row.length > 0){ row.push(field); rows.push(row); }
+    return rows.filter(r => !(r.length === 1 && r[0] === ''));
+  }
+
+  // ==========================================
+  // CSV読み込み
+  // ==========================================
+  function readFileAsText(file, encoding){
+    return new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        try{
+          const buf = reader.result;
+          const decoder = new TextDecoder(encoding === 'Shift_JIS' ? 'shift_jis' : 'utf-8');
+          resolve(decoder.decode(buf));
+        }catch(e){ reject(e); }
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  async function loadAndParseCsvFiles(files, encoding){
+    let header = null;
+    let allRows = [];
+    for (const file of files){
+      const text = await readFileAsText(file, encoding);
+      const rows = parseCSV(text);
+      if (!rows.length) continue;
+      if (HEADER_ROW){
+        if (!header) header = rows[0];
+        allRows = allRows.concat(rows.slice(1));
+      } else {
+        allRows = allRows.concat(rows);
+      }
+    }
+    return { header, allRows };
+  }
+
+  function dedupeAndSort(allRows){
+    const seen = new Set();
+    const deduped = [];
+    allRows.forEach(row=>{
+      const orderId = getCol(row, COL.ORDER_ID);
+      if (!orderId){ deduped.push(row); return; }
+      if (!seen.has(orderId)){ seen.add(orderId); deduped.push(row); }
+    });
+    const sortKey = (row, col)=>{
+      const d = parseDate(getCol(row, col));
+      return d ? d.getTime() : Infinity;
+    };
+    deduped.sort((a,b)=>{
+      const da = sortKey(a, COL.DELIVERY_DATE), db = sortKey(b, COL.DELIVERY_DATE);
+      if (da !== db) return da - db;
+      return sortKey(a, COL.ORDER_DATE) - sortKey(b, COL.ORDER_DATE);
+    });
+    return deduped;
+  }
+
+  // ==========================================
+  // チェック判定
+  // ==========================================
+  function runCheck(rows){
+    const today = new Date(); today.setHours(0,0,0,0);
+    const todayStr = formatDateJP(today);
+    const targetDeliveryDates = getTargetDeliveryDates(today);
+    const typeLabelMap = { warning:'警告', overdue:'放置', stagnant:'停滞' };
+    const allLog = [];
+    const flagged = [];
+
+    rows.forEach(row=>{
+      const orderId = getCol(row, COL.ORDER_ID);
+      const companyName = getCol(row, COL.COMPANY_NAME);
+      const deliveryCompany = getCol(row, COL.DELIVERY_COMPANY);
+      const deliveryVal = getCol(row, COL.DELIVERY_DATE);
+      const orderVal = getCol(row, COL.ORDER_DATE);
+      const productName = getCol(row, COL.PRODUCT_NAME);
+      const setInfo = getCol(row, COL.SET_INFO);
+      const qty = getCol(row, COL.QTY);
+      const memo = getCol(row, COL.MEMO);
+      const paymentVal = getCol(row, COL.PAYMENT_DATE);
+
+      const orderDate = parseDate(orderVal);
+      const deliveryDate = parseDate(deliveryVal);
+
+      let reasonType = '', reasonLabel = '', reasonDetail = '';
+
+      if (deliveryDate){
+        const isSameDayException = orderDate &&
+          orderDate.getTime() === today.getTime() &&
+          deliveryDate.getTime() === addDays(today,2).getTime();
+
+        if (isSameDayException){
+          // 当日発注・2日後配送希望は通常のリードタイムなので対象外
+        } else if (targetDeliveryDates.has(deliveryDate.getTime())){
+          reasonType = 'warning';
+          reasonLabel = '直近納品希望';
+          reasonDetail = `${formatDateJP(deliveryDate)} 納品希望`;
+        } else if (deliveryDate.getTime() < today.getTime()){
+          reasonType = 'overdue';
+          reasonLabel = '納品予定日超過';
+          const overdueDays = countBusinessDays(deliveryDate, today);
+          reasonDetail = `予定日から${overdueDays}営業日経過`;
+        }
+      } else if (orderDate){
+        const code = extractProductCode(productName) || extractProductCode(memo);
+        const leadTime = getLeadTime(code);
+        const businessDays = countBusinessDays(orderDate, today);
+        if (businessDays >= leadTime){
+          reasonType = 'stagnant';
+          reasonLabel = '手配停滞';
+          reasonDetail = `発注から${businessDays}営業日経過（リードタイム${leadTime}営業日）`;
+        }
+      }
+
+      const logRow = [
+        todayStr, orderId, companyName, deliveryCompany, deliveryVal, orderVal,
+        productName, setInfo, qty, memo, paymentVal,
+        typeLabelMap[reasonType] || '', reasonLabel, reasonDetail
+      ];
+      allLog.push({ row: logRow, type: reasonType });
+
+      if (reasonType){
+        flagged.push({
+          orderId, companyName,
+          orderDate: orderDate ? formatDateJP(orderDate) : '',
+          deliveryDate: deliveryDate ? formatDateJP(deliveryDate) : '最短',
+          paymentDate: paymentVal || '',
+          productName, setInfo, memo, reasonType, reasonLabel, reasonDetail
+        });
+      }
+    });
+
+    return { allLog, flagged };
+  }
+
+  // ==========================================
+  // 結果描画
+  // ==========================================
+  function renderResults(results){
+    lastResults = results;
+    document.getElementById('resultSection').style.display = 'block';
+
+    const counts = { warning:0, overdue:0, stagnant:0 };
+    results.forEach(r=>counts[r.reasonType]++);
+
+    const chipHtml = [
+      `<div class="chip warning">警告（直近希望） ${counts.warning}件</div>`,
+      `<div class="chip overdue">放置（予定日超過） ${counts.overdue}件</div>`,
+      `<div class="chip stagnant">停滞（手配遅れ） ${counts.stagnant}件</div>`,
+      `<div class="chip ok">確認対象 合計 ${results.length}件</div>`
+    ].join('');
+    document.getElementById('summaryChips').innerHTML = chipHtml;
+
+    const body = document.getElementById('resultsBody');
+    body.innerHTML = '';
+    const typeLabelMap = { warning:'警告', overdue:'放置', stagnant:'停滞' };
+    results.forEach(r=>{
+      const tr = document.createElement('tr');
+      tr.className = r.reasonType;
+      tr.innerHTML = `
+        <td><span class="badge ${r.reasonType}">${typeLabelMap[r.reasonType]}</span></td>
+        <td>${escapeHtml(r.orderId)}</td>
+        <td>${escapeHtml(r.companyName)}</td>
+        <td>${escapeHtml(r.orderDate)}</td>
+        <td>${escapeHtml(r.deliveryDate)}</td>
+        <td>${escapeHtml(r.paymentDate)}</td>
+        <td class="wrap-col" title="${escapeHtml(r.productName)}">${escapeHtml(r.productName)}</td>
+        <td class="wrap-col" title="${escapeHtml(r.setInfo)}">${escapeHtml(r.setInfo)}</td>
+        <td class="memo-col" title="${escapeHtml(r.memo)}">${escapeHtml(r.memo)}</td>
+        <td class="reason-cell">
+          <div class="reason-label">${escapeHtml(r.reasonLabel)}</div>
+          <div class="reason-detail">${escapeHtml(r.reasonDetail)}</div>
+        </td>`;
+      body.appendChild(tr);
+    });
+    document.getElementById('emptyNote').style.display = results.length ? 'none' : 'block';
+    document.getElementById('resultsTable').style.display = results.length ? 'table' : 'none';
+    document.getElementById('downloadBtn').disabled = results.length === 0;
+  }
+
+  function escapeHtml(v){
+    return String(v ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ==========================================
+  // スプレッドシートへの記録（任意設定・GASの受け口へPOST）
+  // ==========================================
+  async function sendToSheetLog(mode, allLog){
+    const logStatusEl = document.getElementById('log-status');
+    const url = document.getElementById('logUrl').value.trim();
+    if (!url){ logStatusEl.textContent = ''; return; }
+
+    logStatusEl.textContent = 'スプレッドシートへ記録中...';
+    const checkLog = allLog.filter(r => r.type);
+    const payload = {
+      mode,
+      fullRows: allLog.map(r => r.row), fullTypes: allLog.map(r => r.type),
+      checkRows: checkLog.map(r => r.row), checkTypes: checkLog.map(r => r.type),
+    };
+    try{
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.status === 'ok'){
+        logStatusEl.textContent = `スプレッドシートに記録済み（全データ${data.fullCount}件／要確認${data.checkCount}件）`;
+      } else {
+        logStatusEl.textContent = '記録に失敗しました：' + data.message;
+      }
+    }catch(e){
+      logStatusEl.textContent = '記録の応答を確認できませんでした（実際には記録済みの場合もあります。URL・合言葉をご確認ください）';
+    }
+  }
+
+  // ==========================================
+  // CSVダウンロード（外部ライブラリ不使用）
+  // ==========================================
+  function csvEscape(v){
+    const s = String(v ?? '');
+    if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+  document.getElementById('downloadBtn').addEventListener('click', ()=>{
+    if (!lastResults || !lastResults.length) return;
+    const header = ['種別','受注番号','会社名','受注日','配送希望日','入金日','商品名','セット情報','メモ','理由','詳細'];
+    const labelMap = { warning:'警告', overdue:'放置', stagnant:'停滞' };
+    const rows = [header].concat(lastResults.map(r=>[
+      labelMap[r.reasonType], r.orderId, r.companyName, r.orderDate, r.deliveryDate,
+      r.paymentDate, r.productName, r.setInfo, r.memo, r.reasonLabel, r.reasonDetail
+    ]));
+    const csvContent = rows.map(r => r.map(csvEscape).join(',')).join('\r\n');
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const sheetName = mode === 'hold' ? '保留中要確認リスト' : '要確認リスト';
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${sheetName}_${dateStr}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  // ==========================================
+  // ドラッグ&ドロップ
+  // ==========================================
+  const dropZone = document.getElementById('dropZone');
+  const csvFilesInput = document.getElementById('csvFiles');
+  const fileListEl = document.getElementById('fileList');
+
+  dropZone.addEventListener('click', ()=> csvFilesInput.click());
+  ['dragenter','dragover'].forEach(evt=>{
+    dropZone.addEventListener(evt, (e)=>{ e.preventDefault(); e.stopPropagation(); dropZone.classList.add('dragover'); });
+  });
+  ['dragleave','drop'].forEach(evt=>{
+    dropZone.addEventListener(evt, (e)=>{ e.preventDefault(); e.stopPropagation(); dropZone.classList.remove('dragover'); });
+  });
+  dropZone.addEventListener('drop', (e)=>{
+    const files = e.dataTransfer.files;
+    if (files && files.length){
+      csvFilesInput.files = files;
+      updateFileListDisplay(files);
+    }
+  });
+  csvFilesInput.addEventListener('change', ()=> updateFileListDisplay(csvFilesInput.files));
+  function updateFileListDisplay(files){
+    fileListEl.textContent = files.length
+      ? Array.from(files).map(f=>f.name).join('、')
+      : '';
+  }
+
+  // ==========================================
+  // 実行
+  // ==========================================
+  document.getElementById('runBtn').addEventListener('click', async ()=>{
+    const files = csvFilesInput.files;
+    const statusEl = document.getElementById('status-msg');
+    statusEl.classList.remove('error');
+    if (!files.length){
+      statusEl.textContent = 'CSVファイルを選択してください。';
+      statusEl.classList.add('error');
+      return;
+    }
+    const encoding = document.getElementById('encodingSelect').value;
+    statusEl.textContent = '読み込み中...';
+    try{
+      const { header, allRows } = await loadAndParseCsvFiles(files, encoding);
+      if (!allRows.length){
+        statusEl.textContent = '取り込めるデータがありませんでした。';
+        statusEl.classList.add('error');
+        return;
+      }
+      const deduped = dedupeAndSort(allRows);
+      const { allLog, flagged } = runCheck(deduped);
+      renderResults(flagged);
+      statusEl.textContent = `取込完了：${allRows.length}件 → 重複削除後${deduped.length}件。確認対象 ${flagged.length}件。`;
+      sendToSheetLog(mode, allLog);
+    }catch(e){
+      statusEl.textContent = '読み込みに失敗しました。文字コード設定を確認してください（' + e.message + '）';
+      statusEl.classList.add('error');
+    }
+  });
+
+  loadSettings();
+})();
+</script>
+</body>
+</html>
